@@ -1,0 +1,9 @@
+{
+  "name": "Smart Heating Controller",
+  "short_name": "Heating",
+  "start_url": "/#/overview",
+  "display": "standalone",
+  "background_color": "#F4F2EE",
+  "theme_color": "#16181B",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
