@@ -10,8 +10,11 @@ if not exist .venv\Scripts\python.exe (
     pause
     exit /b 1
   )
-  .venv\Scripts\python -m pip install --upgrade pip
-  .venv\Scripts\python -m pip install -r requirements.txt -r bridge\requirements.txt
+)
+.venv\Scripts\python -c "import flask, requests, serial, waitress" 2>nul
+if errorlevel 1 (
+  echo Installing what the website needs - one time, about a minute...
+  .venv\Scripts\python -m pip install --disable-pip-version-check -r requirements.txt -r bridge\requirements.txt
 )
 .venv\Scripts\python run_public.py
 pause

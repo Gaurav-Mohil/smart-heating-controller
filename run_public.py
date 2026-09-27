@@ -24,7 +24,38 @@ import threading
 import time
 from pathlib import Path
 
-import requests
+
+def use_project_environment():
+    """Make sure we run inside the project's .venv with everything installed.
+
+    Whatever Python started this script (VS Code's pick, a double-click...), this
+    creates .venv if needed, installs the requirements if any are missing, and
+    then re-runs this script with the .venv's Python.
+    """
+    root = Path(__file__).resolve().parent
+    venv = root / ".venv"
+    venv_py = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not venv_py.exists():
+        print("Setting up the project for the first time...", flush=True)
+        subprocess.check_call([sys.executable, "-m", "venv", str(venv)])
+    missing = subprocess.call([str(venv_py), "-c", "import flask, requests, serial, waitress"
+                               if os.name == "nt" else "import flask, requests, serial"],
+                              stderr=subprocess.DEVNULL) != 0
+    if missing:
+        print("Installing what the website needs (one time, about a minute)...", flush=True)
+        subprocess.check_call([str(venv_py), "-m", "pip", "install", "--disable-pip-version-check",
+                               "-r", str(root / "requirements.txt"), "-r", str(root / "bridge" / "requirements.txt")])
+    if Path(sys.executable).resolve() != venv_py.resolve():
+        try:
+            sys.exit(subprocess.call([str(venv_py), str(Path(__file__).resolve())] + sys.argv[1:]))
+        except KeyboardInterrupt:
+            sys.exit(0)
+
+
+if __name__ == "__main__":
+    use_project_environment()
+
+import requests  # noqa: E402  (after the environment check above)
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("SHC_DATA_DIR", ROOT / "data"))

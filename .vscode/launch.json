@@ -7,7 +7,16 @@
       "request": "launch",
       "program": "${workspaceFolder}/run_public.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "windows": {
+        "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
     },
     {
       "name": "Website (server)",
@@ -16,7 +25,16 @@
       "module": "server.app",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "justMyCode": true
+      "justMyCode": true,
+      "windows": {
+        "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
     },
     {
       "name": "USB bridge (Arduino Uno)",
@@ -25,7 +43,16 @@
       "program": "${workspaceFolder}/bridge/serial_bridge.py",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "windows": {
+        "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      },
+      "linux": {
+        "python": "${workspaceFolder}/.venv/bin/python"
+      }
     }
   ],
   "compounds": [
