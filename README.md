@@ -51,36 +51,54 @@ not change your bill or sign you up for any program.
   the server.
 - **Host the website somewhere that is always on.** See Deploy below.
 
-## Run it on your Mac (5 minutes)
+## Run it on Windows (5 minutes)
 
-```bash
-cd smart-heating-controller
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python -m server.app
+1. Install Python 3 from https://www.python.org/downloads/. In the installer,
+   tick **"Add python.exe to PATH"**.
+2. Download this project: on GitHub, choose **Code → Download ZIP**, then
+   unzip it. Or use `git clone`.
+3. Double-click **`start_server.bat`**. The first run installs everything. Then
+   open http://localhost:8000. The window shows the website password on the
+   first start; it's also saved in `data\password.txt`. Keep the window open
+   while you use the site.
+
+If Windows asks whether Python may use the network, allow **Private networks**.
+Your phone on the same Wi-Fi can then open `http://<your PC's IP>:8000`. Run
+`ipconfig` to find the IPv4 address.
+
+To choose your own password, run these in PowerShell from the project folder:
+
+```powershell
+$env:SHC_PASSWORD = "yourpassword"
+.venv\Scripts\python -m server.app
 ```
-
-Open http://localhost:8000. On the first start, the terminal prints the website
-password; it's also saved in `data/password.txt`. To choose your own password,
-start it with `SHC_PASSWORD=yourpassword python -m server.app`.
-
-The harmless `NotOpenSSLWarning` from the Mac's built-in Python can be ignored,
-as before.
 
 ### Use your current Arduino Uno right away (USB)
 
-1. Upload `firmware/uno_usb/uno_usb.ino` to the Uno (same LCD wiring; servo on
-   D9; D2 not used). It still understands `PREPARE` / `NORMAL` / `PREHEAT`.
-2. On the website, go to **Devices → Connect the controller** and copy the device key.
-3. In a second terminal:
-   ```bash
-   pip install -r bridge/requirements.txt
-   python bridge/serial_bridge.py --server http://localhost:8000 --key <DEVICE KEY> --port /dev/cu.usbmodem11201
-   ```
-   The Devices page should switch to **Online · usb**.
+1. In the Arduino IDE, upload `firmware\uno_usb\uno_usb.ino` to the Uno (same
+   LCD wiring; servo on D9; D2 not used). It still understands `PREPARE` /
+   `NORMAL` / `PREHEAT`.
+2. **Close the IDE's Serial Monitor.** Only one program can use the COM port at a time.
+3. Double-click **`start_bridge.bat`** and press Enter to accept the address. It
+   finds the Arduino's COM port (e.g. `COM3`) automatically and reads the
+   device key from `data\device_token.txt`. The Devices page should switch to
+   **Online · usb**.
+
+   If it picks the wrong port, run it by hand:
+   `.venv\Scripts\python bridge\serial_bridge.py --server http://localhost:8000 --key <KEY> --port COM4`
+   (Arduino IDE → Tools → Port shows the right one).
 
 This replaces `weather_controller.py`. The forecast check, the PREPARE/NORMAL
 decision and the serial commands now live in the server and the bridge.
+
+### On a Mac or Linux instead
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r bridge/requirements.txt
+python -m server.app
+python bridge/serial_bridge.py --server http://localhost:8000 --key <DEVICE KEY>
+```
 
 ### Go wireless (no computer needed)
 
@@ -96,10 +114,14 @@ shape, so the LCD and servo wiring stays exactly the same.
 
 Pick one:
 
-- **Raspberry Pi at home + Cloudflare Tunnel (free).** Run the server on a Pi,
-  or on any computer that stays on, and publish it with a free Cloudflare
-  Tunnel to get an https address that works from anywhere. The data stays at
-  home.
+- **Your Windows PC (or a Raspberry Pi) at home + Cloudflare Tunnel (free).**
+  Keep `start_server.bat` running and install `cloudflared`
+  (`winget install Cloudflare.cloudflared`). Then run
+  `cloudflared tunnel --url http://localhost:8000` for a quick test address, or
+  set up a named tunnel with your own domain so the address never changes. The
+  data stays at home, but it only works while the PC is on and not asleep. To
+  start it automatically, add `start_server.bat` and `start_bridge.bat` to
+  Task Scheduler with the trigger "At log on".
 - **A cloud host with a persistent disk** (Render, Railway, Fly.io…). Use the
   included `Dockerfile` and mount a disk at `/data`. Set these environment
   variables:
@@ -148,7 +170,7 @@ too.
 ## Development
 
 ```bash
-pip install -r requirements.txt pytest pyserial
+pip install -r requirements.txt -r bridge/requirements.txt pytest
 python -m pytest
 ```
 

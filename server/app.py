@@ -526,4 +526,10 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
-    create_app().run(host="0.0.0.0", port=port, debug=False)
+    try:
+        from waitress import serve  # production-grade server that also runs on Windows
+    except ImportError:
+        create_app().run(host="0.0.0.0", port=port, debug=False)
+    else:
+        print(f"[smart-heating] Open http://localhost:{port}")
+        serve(create_app(), host="0.0.0.0", port=port, threads=8)

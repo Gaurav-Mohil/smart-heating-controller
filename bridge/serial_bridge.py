@@ -1,10 +1,12 @@
 """USB bridge: lets the current Arduino Uno (no Wi-Fi) be controlled from the website.
 
-Runs on the Mac (or a Raspberry Pi) that the Uno is plugged into:
+Runs on the Windows PC, Mac or Raspberry Pi that the Uno is plugged into:
 
     pip install requests pyserial
-    python bridge/serial_bridge.py --server https://my-heating.onrender.com --key DEVICE_KEY \
-        --port /dev/cu.usbmodem11201
+    python bridge/serial_bridge.py --server https://my-heating.onrender.com --key DEVICE_KEY
+
+The Arduino's port (COM3 on Windows, /dev/cu.usbmodem... on a Mac) is found
+automatically; pass --port COM4 to choose one yourself.
 
 Every 10 seconds it checks in with the website, then moves the servo and updates
 the LCD through the Uno's USB serial port (firmware/uno_usb). If the website
@@ -19,6 +21,7 @@ from datetime import datetime
 
 import requests
 import serial
+from serial.tools import list_ports
 
 SYNC_SECONDS = 10
 
@@ -81,12 +84,33 @@ class Arduino:
         return reply
 
 
+def find_arduino_port():
+    """Pick the serial port that looks like an Arduino (COMx on Windows)."""
+    ports = list(list_ports.comports())
+    for p in ports:
+        text = f"{p.description} {p.manufacturer or ''}".lower()
+        if "arduino" in text or p.vid == 0x2341:
+            return p.device
+    for p in ports:
+        text = f"{p.device} {p.description}".lower()
+        if "usbmodem" in text or "usb serial" in text or "ch340" in text or "usb-serial" in text:
+            return p.device
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--server", required=True, help="website address, e.g. https://my-heating.onrender.com")
     ap.add_argument("--key", required=True, help="device key from the website's Devices page")
-    ap.add_argument("--port", default="/dev/cu.usbmodem11201", help="Arduino serial port")
+    ap.add_argument("--port", help="Arduino serial port, e.g. COM3 (found automatically if left out)")
     args = ap.parse_args()
+    if not args.port:
+        args.port = find_arduino_port()
+        if not args.port:
+            names = ", ".join(p.device for p in list_ports.comports()) or "none"
+            sys.exit(f"Couldn't find the Arduino. Plug it in, or pass --port (ports seen: {names}). "
+                     "Close the Arduino IDE's Serial Monitor first - only one program can use the port.")
+        print(f"Using Arduino on {args.port}")
 
     arduino = Arduino(args.port)
     session = requests.Session()
