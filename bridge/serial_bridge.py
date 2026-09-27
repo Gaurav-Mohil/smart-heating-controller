@@ -18,6 +18,7 @@ import argparse
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 import serial
@@ -100,10 +101,18 @@ def find_arduino_port():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--server", required=True, help="website address, e.g. https://my-heating.onrender.com")
-    ap.add_argument("--key", required=True, help="device key from the website's Devices page")
+    ap.add_argument("--server", default="http://localhost:8000",
+                    help="website address (default: the website running on this computer)")
+    ap.add_argument("--key", help="device key from the website's Devices page "
+                                  "(default: read from data/device_token.txt)")
     ap.add_argument("--port", help="Arduino serial port, e.g. COM3 (found automatically if left out)")
     args = ap.parse_args()
+    if not args.key:
+        token_file = Path(__file__).resolve().parent.parent / "data" / "device_token.txt"
+        if not token_file.exists():
+            sys.exit("No device key given. Start the website once first, or pass --key "
+                     "(copy it from the website's Devices page).")
+        args.key = token_file.read_text().strip()
     if not args.port:
         args.port = find_arduino_port()
         if not args.port:

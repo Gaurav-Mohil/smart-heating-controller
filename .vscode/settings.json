@@ -1,0 +1,7 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "files.exclude": {
+    "**/__pycache__": true,
+    ".pytest_cache": true
+  }
+}

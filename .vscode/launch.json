@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Website (server)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "server.app",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "USB bridge (Arduino Uno)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/bridge/serial_bridge.py",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Website + USB bridge",
+      "configurations": [
+        "Website (server)",
+        "USB bridge (Arduino Uno)"
+      ]
+    }
+  ]
+}

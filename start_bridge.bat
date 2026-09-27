@@ -7,13 +7,5 @@ if not exist .venv\Scripts\python.exe (
   pause
   exit /b 1
 )
-set SERVER=http://localhost:8000
-if exist data\device_token.txt (
-  set /p KEY=<data\device_token.txt
-) else (
-  set /p KEY=Paste the device key from the website's Devices page: 
-)
-set /p SERVER_IN=Website address [%SERVER%]: 
-if not "%SERVER_IN%"=="" set SERVER=%SERVER_IN%
-.venv\Scripts\python bridge\serial_bridge.py --server %SERVER% --key %KEY%
+.venv\Scripts\python bridge\serial_bridge.py %*
 pause

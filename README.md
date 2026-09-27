@@ -51,6 +51,23 @@ not change your bill or sign you up for any program.
   the server.
 - **Host the website somewhere that is always on.** See Deploy below.
 
+## Run it in VS Code (Windows, Mac or Linux)
+
+1. Install Python 3 from https://www.python.org/downloads/. On Windows, tick
+   **"Add python.exe to PATH"**.
+2. In VS Code, choose **File → Open Folder…** and pick this project folder.
+   Click **Install** when VS Code offers the recommended Python extensions.
+3. **Terminal → Run Task… → Set up (first time)**. This installs everything
+   into a `.venv` folder.
+4. Press **Ctrl+Shift+P**, choose **Python: Select Interpreter**, and pick the
+   one marked `.venv`.
+5. Open the **Run and Debug** view (Ctrl+Shift+D), choose **Website (server)**
+   and press **F5**. The terminal shows your password. Then open
+   http://localhost:8000.
+6. With the Uno plugged in (and the Arduino IDE's Serial Monitor closed), choose
+   **USB bridge (Arduino Uno)** and press F5 again. Once the website has been
+   started at least once, **Website + USB bridge** starts both together.
+
 ## Run it on Windows (5 minutes)
 
 1. Install Python 3 from https://www.python.org/downloads/. In the installer,
@@ -79,7 +96,7 @@ $env:SHC_PASSWORD = "yourpassword"
    LCD wiring; servo on D9; D2 not used). It still understands `PREPARE` /
    `NORMAL` / `PREHEAT`.
 2. **Close the IDE's Serial Monitor.** Only one program can use the COM port at a time.
-3. Double-click **`start_bridge.bat`** and press Enter to accept the address. It
+3. Double-click **`start_bridge.bat`**. It
    finds the Arduino's COM port (e.g. `COM3`) automatically and reads the
    device key from `data\device_token.txt`. The Devices page should switch to
    **Online · usb**.
