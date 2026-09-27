@@ -54,6 +54,9 @@ def use_project_environment():
 
 if __name__ == "__main__":
     use_project_environment()
+    if "--setup-only" in sys.argv:  # used by VS Code before starting the website or bridge
+        print("Project environment is ready.", flush=True)
+        sys.exit(0)
 
 import requests  # noqa: E402  (after the environment check above)
 

@@ -7,16 +7,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/run_public.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "windows": {
-        "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      },
-      "linux": {
-        "python": "${workspaceFolder}/.venv/bin/python"
-      }
+      "console": "integratedTerminal"
     },
     {
       "name": "Website (server)",
@@ -26,6 +17,7 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
+      "preLaunchTask": "Set up (first time)",
       "windows": {
         "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
       },
@@ -44,6 +36,7 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
+      "preLaunchTask": "Set up (first time)",
       "windows": {
         "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
       },
