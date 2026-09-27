@@ -127,28 +127,57 @@ shape, so the LCD and servo wiring stays exactly the same.
    and fill in your Wi-Fi, the website address and the device key.
 3. Upload `firmware/uno_r4_wifi/uno_r4_wifi.ino`.
 
-## Deploy so you can use it from anywhere
+## Put it on the internet (use it from anywhere)
 
-Pick one:
+Your Uno is plugged into your PC, so the PC runs the website and a free
+**Cloudflare Tunnel** publishes it at a real `https://` address. You don't need
+to change your router, and your data stays on your PC.
 
-- **Your Windows PC (or a Raspberry Pi) at home + Cloudflare Tunnel (free).**
-  Keep `start_server.bat` running and install `cloudflared`
-  (`winget install Cloudflare.cloudflared`). Then run
-  `cloudflared tunnel --url http://localhost:8000` for a quick test address, or
-  set up a named tunnel with your own domain so the address never changes. The
-  data stays at home, but it only works while the PC is on and not asleep. To
-  start it automatically, add `start_server.bat` and `start_bridge.bat` to
-  Task Scheduler with the trigger "At log on".
-- **A cloud host with a persistent disk** (Render, Railway, Fly.io…). Use the
-  included `Dockerfile` and mount a disk at `/data`. Set these environment
-  variables:
-  - `SHC_PASSWORD`: the website password.
-  - `SHC_SECURE_COOKIES=1`: required on https.
-  - `SHC_DEVICE_TOKEN` (optional): set this so the device key survives redeploys.
-  - `SHC_SECRET_KEY` (optional): keeps you signed in across redeploys.
+1. Double-click **`start_public.bat`**. In VS Code you can instead choose
+   **Public website (website + Arduino + tunnel)** and press F5.
+   - The first time, it downloads Cloudflare's small `cloudflared` program
+     into `tools\`.
+   - It starts the website, connects the Arduino if it's plugged in (and keeps
+     retrying if not), and opens the tunnel.
+2. It prints a box like:
+   ```
+     Your website is live at:  https://some-random-words.trycloudflare.com
+   ```
+   Open that address on your phone, on mobile data or any Wi-Fi, and sign in
+   with your password. The address is also on the **Devices** page.
+3. Keep the window open. Closing it takes the website offline, but the Arduino
+   stays on its last setting.
 
-  Without a persistent disk, the schedule and usage data are lost on every
-  redeploy.
+**Keep the PC awake:** go to Settings → System → Power → Screen and sleep, and
+set "When plugged in, put my device to sleep after" to **Never**. To start
+automatically after a restart, add `start_public.bat` to Task Scheduler with
+the trigger **At log on**.
+
+**Change the password:** edit `data\password.txt`, then restart. Anyone with the
+address and the password can control your heating, so use a strong one.
+
+### A permanent address (your own domain)
+
+The free `trycloudflare.com` address changes every time the tunnel starts. For
+one that never changes, such as `https://heating.yourname.com`:
+
+1. Get a domain (about $10 a year, for example from Cloudflare Registrar) and
+   add it to a free Cloudflare account.
+2. In the Cloudflare dashboard, go to **Zero Trust → Networks → Tunnels → Create
+   a tunnel**, choose **Cloudflared**, and name it.
+3. Copy the **token**: it's the long text after `--token` in the install
+   command shown. Save it in a file named `data\tunnel_token.txt`.
+4. Under **Public Hostname**, add `heating` + your domain, with service
+   **HTTP** and URL `localhost:8000`.
+5. Run `start_public.bat` again. It now uses your own address.
+
+### Or host it in the cloud (later, with the Wi-Fi Arduino)
+
+Once you switch to an Arduino UNO R4 WiFi, the PC is no longer needed. You can
+run the website on a cloud host with a persistent disk (Render, Railway,
+Fly.io…) using the included `Dockerfile`, with a disk mounted at `/data`. Set
+these environment variables: `SHC_PASSWORD`, `SHC_SECURE_COOKIES=1`,
+`SHC_DEVICE_TOKEN` and `SHC_SECRET_KEY`.
 
 On an iPhone or Android phone, open the site and choose **Add to Home Screen**
 to get an app icon.

@@ -213,3 +213,13 @@ def test_bridge_offline_schedule_matches_server(ctl):
     assert scheduled_angle(sched, monday_9am) == 60   # Away 18 °C
     assert scheduled_angle(sched, sunday_9am) == 90   # Morning 21 °C
     assert scheduled_angle(sched, datetime(2026, 9, 27, 0, 5)) == 70  # Overnight from Saturday
+
+
+def test_login_lockout_ignores_spoofed_forwarded_for(tmp_path, ctl, monkeypatch):
+    monkeypatch.setenv("SHC_PASSWORD", "letmein")
+    monkeypatch.setattr("server.app.time.sleep", lambda s: None)
+    c = create_app(tmp_path, controller=ctl).test_client()
+    codes = [c.post("/api/login", json={"password": "x"},
+                    headers={"X-Forwarded-For": f"10.0.0.{i}"}).status_code for i in range(10)]
+    assert codes[-1] == 429
+    assert c.post("/api/login", json={"password": "letmein"}).status_code == 429

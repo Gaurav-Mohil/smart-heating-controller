@@ -2,6 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Public website (website + Arduino + tunnel)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_public.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Website (server)",
       "type": "debugpy",
       "request": "launch",

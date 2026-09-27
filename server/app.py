@@ -118,9 +118,12 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
     # ---- sign in -----------------------------------------------------------------------
     @app.post("/api/login")
     def login():
-        ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
-        recent = [t for t in failed_logins.get(ip, []) if time.time() - t < 300]
-        if len(recent) >= 8:
+        # Cloudflare sets CF-Connecting-IP to the visitor's real address; X-Forwarded-For can be faked.
+        ip = request.headers.get("CF-Connecting-IP") or request.remote_addr or "?"
+        now_ts = time.time()
+        recent = [t for t in failed_logins.get(ip, []) if now_ts - t < 300]
+        everyone = sum(1 for times in failed_logins.values() for t in times if now_ts - t < 300)
+        if len(recent) >= 8 or everyone >= 40:
             return err("Too many attempts. Wait a few minutes and try again.", 429)
         given = str(body().get("password", ""))
         if not hmac.compare_digest(given.encode(), password.encode()):
@@ -275,8 +278,16 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
             "calibration": cal,
             "calibrated": logic.is_calibrated(cal),
             "device_token": device_token,
+            "public_url": _public_url(),
             "homeassistant": _ha_public(),
         }
+
+    def _public_url():
+        path = data_dir / "public_url.txt"
+        try:
+            return path.read_text().strip() or None
+        except OSError:
+            return None
 
     @app.post("/api/servo/test")
     @login_required

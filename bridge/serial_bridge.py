@@ -15,6 +15,7 @@ can't be reached, it keeps following the last schedule it received.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from datetime import datetime
@@ -130,7 +131,8 @@ def main():
     ap.add_argument("--port", help="Arduino serial port, e.g. COM3 (found automatically if left out)")
     args = ap.parse_args()
     if not args.key:
-        token_file = Path(__file__).resolve().parent.parent / "data" / "device_token.txt"
+        data_dir = os.environ.get("SHC_DATA_DIR") or Path(__file__).resolve().parent.parent / "data"
+        token_file = Path(data_dir) / "device_token.txt"
         if not token_file.exists():
             sys.exit("No device key given. Start the website once first, or pass --key "
                      "(copy it from the website's Devices page).")

@@ -828,6 +828,9 @@ ${lcd2.padEnd(16)}</div>
             <h2 id="conn-h">Connect the controller</h2>
             <p class="small" style="color:var(--ink-2)">Put these two values in the firmware (Wi-Fi Arduino) or the USB bridge script. Keep the key private.</p>
             <div class="field">Server address<div class="token">${location.origin}</div></div>
+            ${v.public_url ? html`<div class="field">Public website address<div class="actions"><a class="token grow" href="${v.public_url}" target="_blank" rel="noopener">${v.public_url}</a>
+              <button class="btn sm" data-action="copy-url">Copy</button></div>
+              <span class="hint">Open this on your phone from anywhere. It changes each time the tunnel restarts unless you set up your own domain.</span></div>` : ''}
             <div class="field">Device key<div class="actions"><div class="token grow">${token}</div>
               <button class="btn sm" data-action="reveal-token">${S.revealToken ? 'Hide' : 'Show'}</button>
               <button class="btn sm" data-action="copy-token">Copy</button></div></div>
@@ -977,6 +980,7 @@ ${lcd2.padEnd(16)}</div>
 
     // devices
     'reveal-token': () => { S.revealToken = !S.revealToken; render(); },
+    'copy-url': () => run(async () => { await navigator.clipboard.writeText(S.devices.public_url); toast('Address copied'); }),
     'copy-token': () => run(async () => { await navigator.clipboard.writeText(S.devices.device_token); toast('Device key copied'); }),
     servo: (el) => run(async () => { pollSoon(); S.devices = await api('/api/servo/test', { method: 'POST', body: { angle: Number(el.dataset.angle) } }); render(); }),
     'servo-cancel': () => run(async () => { S.devices = await api('/api/servo/cancel', { method: 'POST' }); render(); }),
