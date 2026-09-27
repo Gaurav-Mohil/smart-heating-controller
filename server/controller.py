@@ -57,8 +57,17 @@ class Controller:
 
         target = logic.effective_target(control, schedule, events, calibration, now)
         target["temp"] = round(target["temp"] * 2) / 2
-        target["angle"] = logic.temp_to_angle(target["temp"], calibration)
+        # "base" is your setting (website/schedule); the Arduino may choose something else from it.
+        target["base"] = target["temp"]
+        target["base_reason"] = target["reason"]
         decision = analysis["decision"] if analysis else "NORMAL"
+
+        choice = self.arduino_choice(rules)
+        if choice:
+            target.update(temp=round(logic.clamp_temp(choice["set"], calibration) * 2) / 2,
+                          reason="Arduino", note=choice.get("note") or "")
+            decision = choice.get("decision") or decision
+        target["angle"] = logic.temp_to_angle(target["temp"], calibration)
 
         self._note_changes(target, decision, analysis)
         return {
@@ -74,6 +83,17 @@ class Controller:
             "target": target,
             "decision": decision,
         }
+
+    def arduino_choice(self, rules: dict):
+        """The target the Arduino's own code chose, if it is deciding and online."""
+        if not rules.get("arduino_decides", True):
+            return None
+        device = self.store.get("device") or {}
+        if device.get("set") is None or not device.get("last_seen"):
+            return None
+        if time.time() - device["last_seen"] > DEVICE_ONLINE_SECONDS:
+            return None  # offline: fall back to your setting
+        return {"set": device["set"], "decision": device.get("decision"), "note": device.get("note")}
 
     def _note_changes(self, target: dict, decision: str, analysis) -> None:
         runtime = self.store.get("runtime")
@@ -204,6 +224,18 @@ class Controller:
             if report.get(key) is not None:
                 device[key] = report[key]
 
+        # The Arduino's own decision (sent when its code decides the temperature).
+        if "set" in report:
+            new = (report.get("set"), report.get("decision"), report.get("note"))
+            old = (device.get("set"), device.get("decision"), device.get("note"))
+            if new != old:
+                if new[0] is None:
+                    self.store.log("in", "Arduino: following your setting")
+                else:
+                    why = f" ({new[2]})" if new[2] else ""
+                    self.store.log("in", f"Arduino chose {new[0]:g} °C · {new[1] or 'NORMAL'}{why}")
+            device["set"], device["decision"], device["note"] = new
+
         cmd = self.store.get("command")
         if cmd and report.get("ack") is not None and str(report["ack"]) == str(cmd["id"]):
             self.store.log("in", f"Controller: servo at {cmd['angle']}° (test done)")
@@ -211,6 +243,7 @@ class Controller:
             device["test_until"] = now_ts + 60  # hold the test angle for a minute
             cmd = None
 
+        self.store.set("device", device)  # save first so the plan sees the Arduino's latest decision
         plan = self.plan()
         target = plan["target"]
         if report.get("angle") is not None and report["angle"] == target["angle"] \
@@ -243,6 +276,13 @@ class Controller:
             "lcd2": (f"IN {device['indoor_temp']:.1f}C {plan['decision']}" if device.get("indoor_temp") is not None
                      else f"MODE: {plan['decision']}")[:16],
         }
+        # Inputs for the Arduino's own decision: your setting and the live weather.
+        lines["base"] = f"{target['base']:g}"
+        analysis = plan["analysis"]
+        if analysis:
+            lines["out"] = f"{analysis['current']['temp']:g}"
+            lines["ahead"] = f"{analysis['ahead']['temp']:g}"
+            lines["hours"] = analysis["window"]
         if cmd:
             lines["cmd"] = f"{cmd['id']}:ANGLE:{cmd['angle']}"
         return lines
@@ -259,5 +299,8 @@ class Controller:
             "fw": device.get("fw"),
             "via": device.get("via"),
             "indoor_temp": device.get("indoor_temp"),
+            "set": device.get("set"),
+            "decision": device.get("decision"),
+            "note": device.get("note"),
             "command": self.store.get("command"),
         }

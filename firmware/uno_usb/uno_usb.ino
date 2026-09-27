@@ -10,6 +10,8 @@
     SET <angle> <min> <max>   move the dial servo, never past min/max
     ANGLE <angle>             servo test within the stored limits
     TEMP                      reply with the indoor temperature ("OK TEMP 21.4" or "OK TEMP NONE")
+    INPUT <set> <out> <ahead> <h>  your setting + live weather, for decide()
+    REPORT                    reply with the Arduino's own choice: "OK REPORT 22.0 PREPARE cold_coming"
     LCD1 <text> / LCD2 <text> set a line of the 16x2 display
     PREPARE | NORMAL | PREHEAT   original mode commands
     STATUS                    reply with the current angle
@@ -46,6 +48,56 @@ const int ANALOG_TEMP_PIN = A0;
 #include <DHT.h>
 DHT dht(DHT_PIN, SENSOR_TYPE == SENSOR_DHT11 ? DHT11 : DHT22);
 #endif
+
+// ---- The Arduino decides the temperature -------------------------------------------
+// Every 2 seconds the website sends "your setting" (from the website / schedule) and the
+// live weather. decide() below chooses the actual target; the servo turns to it and the
+// website shows what the Arduino chose and why. Put your own rules in decide().
+// Set ARDUINO_DECIDES to 0 to simply follow the website.
+#define ARDUINO_DECIDES 1
+
+float yourSetting = NAN;     // °C, from the website / schedule
+float outsideNow = NAN;      // °C, live weather in Fredericton
+float outsideAhead = NAN;    // °C, forecast `aheadHours` from now
+int aheadHours = 5;
+
+float chosenTarget = NAN;    // what decide() picked (°C)
+String chosenDecision = "NORMAL";
+String chosenNote = "";      // short reason shown on the website
+
+float readTemperature();     // defined below (room sensor, NAN if none)
+
+void decide() {
+  chosenTarget = yourSetting;
+  chosenDecision = "NORMAL";
+  chosenNote = "following website";
+  if (isnan(yourSetting)) return;
+
+  // Rule 1 (the project's original one): if it gets 2 °C colder or more in the next
+  // few hours, heat 1 °C more now so the house is warm before the cold arrives.
+  if (!isnan(outsideNow) && !isnan(outsideAhead) && outsideAhead - outsideNow <= -2.0) {
+    chosenTarget = yourSetting + 1.0;
+    chosenDecision = "PREPARE";
+    chosenNote = "cold coming";
+  }
+
+  // Rule 2 (example, needs a room sensor): if the room is 2 °C below your setting, boost.
+  float room = readTemperature();
+  if (!isnan(room) && room < yourSetting - 2.0) {
+    chosenTarget = yourSetting + 1.0;
+    chosenNote = "room is cold";
+  }
+
+  // Keep within the thermostat's safe range.
+  if (chosenTarget > 24.0) chosenTarget = 24.0;
+  if (chosenTarget < 18.0) chosenTarget = 18.0;
+}
+
+// "12.5" -> 12.5, "NA" -> NAN
+float parseNumber(const String &text) {
+  if (text.length() == 0 || text == "NA") return NAN;
+  return text.toFloat();
+}
 
 const int SERVO_PIN = 9;
 LiquidCrystal lcd(12, 11, 7, 6, 5, 4);
@@ -148,6 +200,36 @@ void loop() {
     }
   } else if (cmd.startsWith("ANGLE ")) {
     moveServo(cmd.substring(6).toInt());
+  } else if (cmd.startsWith("INPUT ")) {
+    // INPUT <your setting> <outside now> <outside ahead> <hours>   ("NA" = unknown)
+    String rest = cmd.substring(6);
+    String part[4];
+    for (int i = 0; i < 4; i++) {
+      rest.trim();
+      int space = rest.indexOf(' ');
+      part[i] = space < 0 ? rest : rest.substring(0, space);
+      rest = space < 0 ? String("") : rest.substring(space + 1);
+    }
+    yourSetting = parseNumber(part[0]);
+    outsideNow = parseNumber(part[1]);
+    outsideAhead = parseNumber(part[2]);
+    if (part[3].length()) aheadHours = part[3].toInt();
+    Serial.println("OK INPUT");
+  } else if (cmd == "REPORT") {
+    // OK REPORT <target|NONE> <PREPARE|NORMAL> <reason_with_underscores>
+    Serial.print("OK REPORT ");
+    if (!ARDUINO_DECIDES || isnan(yourSetting)) {
+      Serial.println("NONE");
+    } else {
+      decide();
+      String note = chosenNote;
+      note.replace(' ', '_');
+      Serial.print(chosenTarget, 1);
+      Serial.print(' ');
+      Serial.print(chosenDecision);
+      Serial.print(' ');
+      Serial.println(note.length() ? note : String("-"));
+    }
   } else if (cmd == "TEMP") {
     float t = readTemperature();
     Serial.print("OK TEMP ");

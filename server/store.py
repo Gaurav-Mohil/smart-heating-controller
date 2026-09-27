@@ -65,6 +65,8 @@ DEFAULTS = {
         "drop_threshold": 2.0,
         "window_hours": 5,
         "preheat_boost": 1,
+        # When the Arduino's own code reports a target, use it (the website shows what it chose).
+        "arduino_decides": True,
     },
     "calibration": {
         "min_angle": 60,

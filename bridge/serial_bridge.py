@@ -61,6 +61,7 @@ class Arduino:
         self.conn = None
         self.angle = None
         self.temp = None
+        self.last_choice = None
 
     def open(self):
         if self.conn:
@@ -106,6 +107,35 @@ class Arduino:
                 print(f"{datetime.now():%H:%M:%S} indoor {temp} C")
             self.temp = temp
         return reply
+
+    def decision(self):
+        """Ask the Arduino's code what temperature it chose (None if its firmware can't)."""
+        choice = parse_report(self.send("REPORT"))
+        if choice and choice != self.last_choice:
+            if choice.get("set") == "none":
+                print(f"{datetime.now():%H:%M:%S} Arduino follows the website")
+            else:
+                note = f" ({choice['note']})" if choice.get("note") else ""
+                print(f"{datetime.now():%H:%M:%S} Arduino chose {choice['set']} C {choice['decision']}{note}")
+            self.last_choice = choice
+        return choice
+
+
+def parse_report(reply: str):
+    """'OK REPORT 22.0 PREPARE cold_coming' -> params for the website; None if not supported."""
+    parts = reply.split()
+    if len(parts) < 3 or parts[:2] != ["OK", "REPORT"]:
+        return None
+    if parts[2] == "NONE":
+        return {"set": "none"}
+    try:
+        target = round(float(parts[2]), 1)
+    except ValueError:
+        return None
+    out = {"set": target, "decision": parts[3] if len(parts) > 3 else "NORMAL"}
+    if len(parts) > 4 and parts[4] != "-":
+        out["note"] = " ".join(parts[4:]).replace("_", " ")
+    return out
 
 
 def find_arduino_port():
@@ -157,7 +187,14 @@ def main():
 
     while True:
         arduino.send("TEMP")
-        params = {"via": "usb", "fw": "uno-usb-1.1"}
+        params = {"via": "usb", "fw": "uno-usb-1.2"}
+        if last.get("base"):
+            # Give the Arduino your setting and the live weather, then ask what it decided.
+            arduino.send("INPUT {} {} {} {}".format(last["base"], last.get("out", "NA"),
+                                                   last.get("ahead", "NA"), last.get("hours", 5)))
+            choice = arduino.decision()
+            if choice is not None:
+                params.update(choice)
         if arduino.angle is not None:
             params["angle"] = arduino.angle
         if arduino.temp is not None:

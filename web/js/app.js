@@ -286,6 +286,8 @@
   function targetCard(s) {
     const t = s.target;
     const [lo, hi] = s.safe_range;
+    const arduino = t.reason === 'Arduino';
+    const base = t.base !== undefined ? t.base : t.temp;
     const shown = S.pending !== null ? S.pending : t.temp;
     const rot = ((shown - lo) / (hi - lo || 1) - 0.5) * 180;
     const angle = angleFor(shown, s.calibration);
@@ -293,16 +295,17 @@
     const d = s.device;
 
     let reason;
-    if (s.mode === 'manual') reason = html`Manual · stays until you change it`;
+    if (arduino) reason = html`Chosen by the Arduino${t.note ? ` · ${t.note}` : ''} · your setting ${fmtNum(base)} °C`;
+    else if (s.mode === 'manual') reason = html`Manual · stays until you change it`;
     else if (s.mode === 'away') reason = html`Away · kept low until you're back`;
     else if (t.reason === 'Hold') reason = html`Holding until ${timeFmt(t.until)} · <button class="btn-ghost" data-action="resume">Resume schedule</button>`;
     else if (t.reason === 'Preheat') reason = html`Preheating until ${timeFmt(t.until)}`;
     else reason = html`Schedule: ${t.reason}${t.until ? html` until ${timeFmt(t.until)}` : ''}`;
 
     let footer;
-    if (S.pending !== null && S.pending !== t.temp) {
+    if (S.pending !== null && S.pending !== base) {
       footer = html`<div class="actions">
-        <button class="btn btn-primary grow" data-action="apply">Apply ${fmtNum(S.pending)} °C</button>
+        <button class="btn btn-primary grow" data-action="apply">${arduino ? 'Set my setting to' : 'Apply'} ${fmtNum(S.pending)} °C</button>
         <button class="btn-ghost" data-action="cancel-pending">Cancel</button></div>`;
     } else if (d.online && d.angle === t.angle) {
       footer = html`<div class="sent">${ICON.check} Dial set to ${fmtNum(t.temp)} °C · servo ${t.angle}°</div>`;
@@ -357,6 +360,17 @@
         <div class="fact"><div class="label">Decision</div><div class="value" style="color:${s.decision === 'PREPARE' ? '#F8B98C' : '#A7E3B8'}">${s.decision}</div></div>
       </div>` : '';
 
+    if (s.target.reason === 'Arduino') {
+      const t = s.target;
+      return html`<section class="card card-dark suggest grow" aria-labelledby="sg-h">
+        <div class="actions"><span class="chip heat">ARDUINO</span><span class="small" style="color:#A8ADB4">decided by the code on your Arduino</span></div>
+        <h2 id="sg-h">The Arduino chose ${fmtNum(t.temp)} °C${t.note ? html`<br>because: ${t.note}` : ''}</h2>
+        <p>Your setting is ${fmtNum(t.base)} °C. The Arduino gets your setting and the live weather, decides the target in its own code, and the website shows its choice here.</p>
+        ${facts}
+        <div style="flex-grow:1"></div>
+        <div class="actions"><button class="btn btn-on-dark" data-action="arduino-decides" data-on="0">Use my setting instead</button></div>
+      </section>`;
+    }
     if (!a) {
       return html`<section class="card card-dark suggest grow" aria-labelledby="sg-h">
         <span class="chip heat" style="align-self:flex-start">FORECAST</span>
@@ -613,6 +627,8 @@
           <h2 id="rules-h">Smart rules</h2>
           <label class="check"><input type="checkbox" data-rule="preheat_suggestions" ${r.preheat_suggestions ? 'checked' : ''}>
             <span><b>Suggest a preheat before cold drops</b><span>When the forecast falls ${fmtNum(r.drop_threshold)} °C or more within ${r.window_hours} hours</span></span></label>
+          <label class="check"><input type="checkbox" data-rule="arduino_decides" ${r.arduino_decides !== false ? 'checked' : ''}>
+            <span><b>Let the Arduino decide</b><span>When the Arduino's code picks a temperature (from your setting and the weather), use it. Off: the Arduino just follows the website.</span></span></label>
           <label class="check"><input type="checkbox" data-rule="auto_apply" ${r.auto_apply ? 'checked' : ''}>
             <span><b>Accept suggestions automatically</b><span>Off: you approve every preheat first</span></span></label>
           <div class="row" style="gap:12px">
@@ -800,6 +816,7 @@
       <div class="facts-grid">
         <div><div class="k">Last check-in</div><div>${d.seen_seconds_ago === null ? 'Never' : d.seen_seconds_ago < 90 ? `${d.seen_seconds_ago} seconds ago` : relTime(new Date(Date.now() - d.seen_seconds_ago * 1000).toISOString())}</div></div>
         <div><div class="k">Servo angle</div><div class="mono">${d.angle !== null ? `${d.angle}°` : '—'}</div></div>
+        <div><div class="k">Arduino's choice</div><div>${d.set !== null && d.set !== undefined ? `${fmtNum(d.set)} °C · ${d.decision || 'NORMAL'}${d.note ? ` · ${d.note}` : ''}` : 'Follows the website'}</div></div>
         <div><div class="k">Wi-Fi signal</div><div>${d.rssi !== null ? `${d.rssi} dBm (${d.rssi > -60 ? 'good' : d.rssi > -75 ? 'fair' : 'weak'})` : '—'}</div></div>
         <div><div class="k">Pins in use</div><div class="mono small">LCD D4–D7, D11, D12 · Servo D9 · D2 taken</div></div>
       </div>
@@ -922,8 +939,9 @@ ${lcd2.padEnd(16)}</div>
     }),
     step: (el) => {
       const [lo, hi] = S.state.safe_range;
-      const base = S.pending !== null ? S.pending : S.state.target.temp;
-      S.pending = Math.max(lo, Math.min(hi, base + Number(el.dataset.delta)));
+      const t = S.state.target;
+      const from = S.pending !== null ? S.pending : (t.base !== undefined ? t.base : t.temp);
+      S.pending = Math.max(lo, Math.min(hi, from + Number(el.dataset.delta)));
       render();
     },
     'cancel-pending': () => { S.pending = null; render(); },
@@ -980,6 +998,11 @@ ${lcd2.padEnd(16)}</div>
 
     // devices
     'reveal-token': () => { S.revealToken = !S.revealToken; render(); },
+    'arduino-decides': (el) => run(async () => {
+      await api('/api/rules', { method: 'PUT', body: { arduino_decides: el.dataset.on === '1' } });
+      S.state = await api('/api/state'); render();
+      toast(el.dataset.on === '1' ? 'The Arduino decides again' : 'Using your setting — the Arduino follows the website');
+    }),
     'copy-url': () => run(async () => { await navigator.clipboard.writeText(S.devices.public_url); toast('Address copied'); }),
     'copy-token': () => run(async () => { await navigator.clipboard.writeText(S.devices.device_token); toast('Device key copied'); }),
     servo: (el) => run(async () => { pollSoon(); S.devices = await api('/api/servo/test', { method: 'POST', body: { angle: Number(el.dataset.angle) } }); render(); }),

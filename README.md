@@ -37,6 +37,24 @@ works with **old mechanical thermostats** (an SG90 servo turns the dial) and wit
 or numbers you give the site yourself. A report is something *you* send. It does
 not change your bill or sign you up for any program.
 
+## The Arduino decides (two-way)
+
+The Arduino's own code can choose the temperature, and the website shows what it chose.
+
+1. Every 2 seconds the website sends the Arduino **your setting** (from the website
+   or the schedule) and the **live weather**: the outside temperature now and in 5 hours.
+2. `decide()` in `firmware/uno_usb/uno_usb.ino` picks the actual target, a
+   PREPARE/NORMAL decision and a short reason. Out of the box it uses the project's
+   original rule: *2 °C colder within 5 h → heat 1 °C more (PREPARE)*. Edit
+   `decide()` to add your own rules.
+3. The servo turns to the Arduino's choice. The website shows it ("The Arduino chose
+   22 °C because: cold coming"), along with your setting, which you can still change.
+
+To turn this off, untick **Let the Arduino decide** under Schedule → Smart rules, or
+press **Use my setting instead** on the Overview. You can also set
+`#define ARDUINO_DECIDES 0` in the sketch. If the Arduino goes offline, the website
+falls back to your setting.
+
 ## Keeping it running ("always works")
 
 - **The controller carries on alone.** Every check-in sends it the whole weekly

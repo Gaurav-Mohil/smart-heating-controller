@@ -180,6 +180,7 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
                 "fetched_at": iso_ts(forecast["fetched_at"]),
             },
             "suggestion": plan["suggestion"],
+            "arduino_decides": plan["rules"].get("arduino_decides", True),
             "upcoming": logic.upcoming(plan["schedule"], plan["events"], now),
             "device": ctl.device_status(),
             "homeassistant": _ha_public(),
@@ -253,7 +254,7 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
     def put_rules():
         data = body()
         rules = store.get("rules")
-        for key in ("preheat_suggestions", "auto_apply"):
+        for key in ("preheat_suggestions", "auto_apply", "arduino_decides"):
             if key in data:
                 rules[key] = bool(data[key])
         try:
@@ -528,6 +529,12 @@ def create_app(data_dir=None, controller: Controller = None) -> Flask:
             "fw": request.args.get("fw", "")[:32] or None,
             "via": request.args.get("via", "")[:16] or None,
         }
+        # Sent by firmware whose own code decides the temperature ("set=none" = follow the website).
+        if "set" in request.args:
+            report["set"] = num("set")
+            decision = request.args.get("decision", "").upper()
+            report["decision"] = decision if decision in ("PREPARE", "NORMAL") else None
+            report["note"] = request.args.get("note", "")[:40].strip() or None
         lines = ctl.device_sync(report)
         text = "".join(f"{k}={v}\n" for k, v in lines.items())
         return Response(text, mimetype="text/plain")

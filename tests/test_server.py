@@ -168,7 +168,8 @@ def test_api_state_and_control(client):
     assert len(s["forecast"]["hours"]) == 8
     s = client.post("/api/control", json={"mode": "manual"}).get_json()
     s = client.post("/api/control", json={"temp": 23}).get_json()
-    assert s["target"] == {"temp": 23.0, "reason": "Manual", "until": None, "angle": 110}
+    assert s["target"] == {"temp": 23.0, "reason": "Manual", "until": None, "angle": 110,
+                           "base": 23.0, "base_reason": "Manual"}
 
 
 def test_api_schedule_roundtrip(client):
@@ -223,3 +224,44 @@ def test_login_lockout_ignores_spoofed_forwarded_for(tmp_path, ctl, monkeypatch)
                     headers={"X-Forwarded-For": f"10.0.0.{i}"}).status_code for i in range(10)]
     assert codes[-1] == 429
     assert c.post("/api/login", json={"password": "letmein"}).status_code == 429
+
+
+def test_arduino_decision_drives_target_and_website_sets_base(ctl):
+    lines = ctl.device_sync({})
+    assert lines["base"] == "19" and lines["out"] == "12.5" and lines["ahead"] == "9.8" and lines["hours"] == 5
+    # The Arduino's own code chooses 20 °C because cold is coming.
+    lines = ctl.device_sync({"set": 20.0, "decision": "PREPARE", "note": "cold coming"})
+    assert (lines["target"], lines["angle"], lines["decision"]) == ("20", 80, "PREPARE")
+    t = ctl.plan()["target"]
+    assert (t["temp"], t["reason"], t["base"], t["note"]) == (20, "Arduino", 19, "cold coming")
+    # Changing the temperature on the website changes the base the Arduino decides from.
+    ctl.set_temperature(22)
+    assert ctl.device_sync({"set": 23.0, "decision": "PREPARE", "note": "cold coming"})["base"] == "22"
+    assert ctl.plan()["target"]["temp"] == 23
+    # "set=none": the Arduino follows the website again.
+    ctl.device_sync({"set": None})
+    assert ctl.plan()["target"]["temp"] == 22
+
+
+def test_arduino_decision_ignored_when_off_or_offline(ctl):
+    ctl.device_sync({"set": 24.0, "decision": "PREPARE", "note": "x"})
+    rules = ctl.store.get("rules"); rules["arduino_decides"] = False; ctl.store.set("rules", rules)
+    assert ctl.plan()["target"]["temp"] == 19
+    rules["arduino_decides"] = True; ctl.store.set("rules", rules)
+    device = ctl.store.get("device"); device["last_seen"] -= 3600; ctl.store.set("device", device)
+    assert ctl.plan()["target"]["temp"] == 19
+
+
+def test_device_endpoint_accepts_arduino_decision(client):
+    r = client.get("/api/device/sync?set=21.5&decision=prepare&note=cold%20coming",
+                   headers={"X-Device-Token": "devtoken"}).get_data(as_text=True)
+    assert "target=21.5\n" in r and "decision=PREPARE\n" in r
+    s = client.get("/api/state").get_json()
+    assert s["target"]["reason"] == "Arduino" and s["device"]["note"] == "cold coming"
+
+
+def test_bridge_parses_arduino_report():
+    from bridge.serial_bridge import parse_report
+    assert parse_report("OK REPORT 22.0 PREPARE cold_coming") == {"set": 22.0, "decision": "PREPARE", "note": "cold coming"}
+    assert parse_report("OK REPORT NONE") == {"set": "none"}
+    assert parse_report("ERR UNKNOWN") is None
