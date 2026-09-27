@@ -188,6 +188,10 @@ def main():
         (DATA / "device_token.txt").read_text().strip() if (DATA / "device_token.txt").exists() else "")
     if key:
         bridge_args += ["--key", key]
+    port_file = DATA / "arduino_port.txt"  # e.g. "COM3" if the Arduino isn't found automatically
+    arduino_port = os.environ.get("ARDUINO_PORT") or (port_file.read_text().strip() if port_file.exists() else "")
+    if arduino_port:
+        bridge_args += ["--port", arduino_port]
     bridge = Keeper("arduino", bridge_args, env=env, retry_seconds=30)
     bridge.start()
 
@@ -200,17 +204,18 @@ def main():
             print(f"  Your website is live at:  {url}", flush=True)
             print("  Open it on your phone from anywhere. Keep this window open.", flush=True)
             print("=" * 64 + "\n", flush=True)
-        elif "Registered tunnel connection" in line and tunnel_token:
-            say("Tunnel connected - your website is live at your own domain.")
+        elif "Registered tunnel connection" in line:
+            say("Tunnel connected." + (" Your website is live at your own domain." if tunnel_token else ""))
         elif "ERR" in line or "error" in line.lower():
             print(f"  tunnel: {line}", flush=True)
 
     if tunnel_token:
-        args = [cloudflared, "tunnel", "--no-autoupdate", "run", "--token", tunnel_token]
+        args = [cloudflared, "tunnel", "--no-autoupdate", "--protocol", "http2", "run", "--token", tunnel_token]
         if URL_FILE.exists():
             URL_FILE.unlink()
     else:
-        args = [cloudflared, "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{PORT}"]
+        # --protocol http2 uses normal HTTPS (TCP 443); many home/campus networks block the default QUIC (UDP).
+        args = [cloudflared, "tunnel", "--no-autoupdate", "--protocol", "http2", "--url", f"http://127.0.0.1:{PORT}"]
     say("Opening the Cloudflare Tunnel...")
     tunnel = Keeper("tunnel", args, env=env, on_line=tunnel_line, retry_seconds=10)
     tunnel.start()

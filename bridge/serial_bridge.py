@@ -140,9 +140,11 @@ def main():
     if not args.port:
         args.port = find_arduino_port()
         if not args.port:
-            names = ", ".join(p.device for p in list_ports.comports()) or "none"
-            sys.exit(f"Couldn't find the Arduino. Plug it in, or pass --port (ports seen: {names}). "
-                     "Close the Arduino IDE's Serial Monitor first - only one program can use the port.")
+            seen = [f"{p.device} = {p.description}" for p in list_ports.comports()]
+            sys.exit("Couldn't find the Arduino. Is it plugged in by USB? Ports seen: "
+                     + ("; ".join(seen) or "none")
+                     + ". If one of them is the Arduino (Arduino IDE -> Tools -> Port shows which), "
+                       "put just its name, e.g. COM3, in the file data\\arduino_port.txt")
         print(f"Using Arduino on {args.port}")
 
     arduino = Arduino(args.port)
