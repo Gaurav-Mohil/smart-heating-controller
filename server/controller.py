@@ -239,8 +239,9 @@ class Controller:
                 f"{logic.temp_to_angle(p['temp'], cal)}"
                 for p in schedule
             ),
-            "lcd1": f"{target['temp']:g}C {plan['control']['mode'].upper()}"[:16],
-            "lcd2": f"MODE: {plan['decision']}"[:16],
+            "lcd1": f"SET {target['temp']:g}C {plan['control']['mode'].upper()}"[:16],
+            "lcd2": (f"IN {device['indoor_temp']:.1f}C {plan['decision']}" if device.get("indoor_temp") is not None
+                     else f"MODE: {plan['decision']}")[:16],
         }
         if cmd:
             lines["cmd"] = f"{cmd['id']}:ANGLE:{cmd['angle']}"

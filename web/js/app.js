@@ -204,9 +204,18 @@
     }
   }
 
+  // Refresh every 5 s, and every 1.5 s for a little while after you change something,
+  // so you can watch the dial move and the temperature update.
+  let lastRefresh = 0;
+  let fastUntil = 0;
+  function pollSoon() { fastUntil = Date.now() + 20000; }
   function startPolling() {
     stopPolling();
-    S.pollTimer = setInterval(() => { if (!document.hidden) refresh(false); }, 10000);
+    S.pollTimer = setInterval(() => {
+      if (document.hidden) return;
+      const gap = Date.now() < fastUntil ? 1500 : 5000;
+      if (Date.now() - lastRefresh >= gap - 100) { lastRefresh = Date.now(); refresh(false); }
+    }, 1500);
   }
   function stopPolling() { if (S.pollTimer) clearInterval(S.pollTimer); S.pollTimer = null; }
 
@@ -779,8 +788,9 @@
   function deviceLive() {
     const d = S.devices.device;
     const s = S.state;
-    const lcd1 = s ? `${fmtNum(s.target.temp)}C ${s.mode.toUpperCase()}`.slice(0, 16) : '';
-    const lcd2 = s ? `MODE: ${s.decision}`.slice(0, 16) : '';
+    const lcd1 = s ? `SET ${fmtNum(s.target.temp)}C ${s.mode.toUpperCase()}`.slice(0, 16) : '';
+    const lcd2 = s ? (d.indoor_temp !== null && d.indoor_temp !== undefined
+      ? `IN ${Number(d.indoor_temp).toFixed(1)}C ${s.decision}` : `MODE: ${s.decision}`).slice(0, 16) : '';
     let status;
     if (d.online) status = html`<span style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--ok-ink)"><span class="dot"></span>Online${d.via ? ` · ${d.via}` : ''}</span>`;
     else if (d.seen_seconds_ago === null) status = html`<span style="display:flex;align-items:center;gap:6px;font-weight:600"><span class="dot off"></span>Waiting for first connection</span>`;
@@ -903,6 +913,7 @@ ${lcd2.padEnd(16)}</div>
     // overview
     mode: (el) => run(async () => {
       S.state = await api('/api/control', { method: 'POST', body: { mode: el.dataset.mode } });
+      pollSoon();
       S.pending = null;
       render(); renderStatus();
     }),
@@ -915,6 +926,7 @@ ${lcd2.padEnd(16)}</div>
     'cancel-pending': () => { S.pending = null; render(); },
     apply: () => run(async () => {
       S.state = await api('/api/control', { method: 'POST', body: { temp: S.pending } });
+      pollSoon();
       S.pending = null;
       render();
       toast(S.state.mode === 'auto' ? `Set to ${fmtNum(S.state.target.temp)} °C until the next scheduled change` : `Set to ${fmtNum(S.state.target.temp)} °C`);
@@ -966,7 +978,7 @@ ${lcd2.padEnd(16)}</div>
     // devices
     'reveal-token': () => { S.revealToken = !S.revealToken; render(); },
     'copy-token': () => run(async () => { await navigator.clipboard.writeText(S.devices.device_token); toast('Device key copied'); }),
-    servo: (el) => run(async () => { S.devices = await api('/api/servo/test', { method: 'POST', body: { angle: Number(el.dataset.angle) } }); render(); }),
+    servo: (el) => run(async () => { pollSoon(); S.devices = await api('/api/servo/test', { method: 'POST', body: { angle: Number(el.dataset.angle) } }); render(); }),
     'servo-cancel': () => run(async () => { S.devices = await api('/api/servo/cancel', { method: 'POST' }); render(); }),
     'cal-use': (el) => {
       const p = S.calDraft.points[Number(el.dataset.i)];
@@ -1054,6 +1066,7 @@ ${lcd2.padEnd(16)}</div>
         await loadEnergy();
       }),
       'servo-form': () => run(async () => {
+        pollSoon();
         S.devices = await api('/api/servo/test', { method: 'POST', body: { angle: Number(form.angle.value) } });
         render();
       }),

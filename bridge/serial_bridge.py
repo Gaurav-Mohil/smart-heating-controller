@@ -24,7 +24,7 @@ import requests
 import serial
 from serial.tools import list_ports
 
-SYNC_SECONDS = 10
+SYNC_SECONDS = 2  # how often to check the website; the dial follows changes within a few seconds
 
 
 def parse(text: str) -> dict:
@@ -59,6 +59,7 @@ class Arduino:
         self.port = port
         self.conn = None
         self.angle = None
+        self.temp = None
 
     def open(self):
         if self.conn:
@@ -69,19 +70,40 @@ class Arduino:
         print(f"Connected to Arduino on {self.port}")
 
     def send(self, line: str) -> str:
+        """Send one command and return the Arduino's OK/ERR reply ("" if none)."""
         try:
             self.open()
             self.conn.write((line + "\n").encode())
-            reply = self.conn.readline().decode(errors="replace").strip()
+            deadline = time.time() + 4
+            reply = ""
+            while time.time() < deadline:
+                text = self.conn.readline().decode(errors="replace").strip()
+                if text.startswith(("OK", "ERR", "MODE")):
+                    reply = text
+                    break
         except (serial.SerialException, OSError) as exc:
-            print(f"Arduino not reachable ({exc}); retrying next round")
+            print(f"Arduino not reachable ({exc}); retrying")
             self.conn = None
             return ""
-        if reply.startswith("OK ANGLE "):
+        parts = reply.split()
+        if reply.startswith("OK ANGLE ") and len(parts) == 3:
             try:
-                self.angle = int(reply.split()[-1])
+                angle = int(parts[2])
             except ValueError:
-                pass
+                angle = None
+            if angle is not None and angle != self.angle and angle >= 0:
+                print(f"{datetime.now():%H:%M:%S} dial moved to {angle} degrees")
+                self.angle = angle
+        elif reply.startswith("OK TEMP ") and len(parts) == 3:
+            try:
+                temp = round(float(parts[2]), 1)
+            except ValueError:
+                temp = None  # "OK TEMP NONE": no sensor fitted
+            if temp is not None and not (-30 < temp < 60):
+                temp = None  # ignore impossible readings from a loose wire
+            if temp is not None and temp != self.temp:
+                print(f"{datetime.now():%H:%M:%S} indoor {temp} C")
+            self.temp = temp
         return reply
 
 
@@ -130,9 +152,12 @@ def main():
     lcd = (None, None)
 
     while True:
-        params = {"via": "usb", "fw": "uno-usb-1.0"}
+        arduino.send("TEMP")
+        params = {"via": "usb", "fw": "uno-usb-1.1"}
         if arduino.angle is not None:
             params["angle"] = arduino.angle
+        if arduino.temp is not None:
+            params["temp"] = arduino.temp
         if ack is not None:
             params["ack"] = ack
         try:

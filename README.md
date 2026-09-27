@@ -181,8 +181,17 @@ too.
 - **Calibration:** on Devices, move the servo until the dial reads each
   temperature, then press **Use current angle**. Until every point is measured,
   the site marks the mapping as uncalibrated.
-- **Indoor sensor (optional):** a DS18B20 or DHT22 on a free pin (D3 or D8).
-  Send its reading as `&temp=21.3` on the sync request and the site shows it.
+- **Indoor temperature (optional):** use any sensor from your kit. Open
+  `firmware/uno_usb/uno_usb.ino`, change `#define SENSOR_TYPE SENSOR_NONE` to
+  your sensor, and upload again. The comment above that line shows the wiring
+  for each one:
+  - DHT11 or DHT22: data pin on **D3**. Needs the "DHT sensor library" by
+    Adafruit.
+  - TMP36, LM35 or the kit's thermistor module: signal on **A0**.
+
+  The room temperature then shows on the website and the LCD, updating every
+  few seconds. Connect the sensor's + to the breadboard's 5V rail (shared with
+  the LCD) and its − to GND.
 
 ## Development
 

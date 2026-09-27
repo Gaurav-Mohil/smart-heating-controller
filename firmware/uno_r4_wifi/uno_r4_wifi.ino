@@ -19,9 +19,36 @@
 #include <EEPROM.h>
 #include "arduino_secrets.h"
 
-#define FW_VERSION "r4wifi-1.0"
+// ---- Optional indoor temperature sensor ----------------------------------------
+// Set SENSOR_TYPE to the sensor you have, then upload again.
+//   SENSOR_NONE        no sensor (the website shows "—")
+//   SENSOR_DHT11       blue DHT11 module:   S/data -> D3, + -> 5V, - -> GND
+//   SENSOR_DHT22       white DHT22 module:  same wiring as DHT11
+//     (DHT sensors need the "DHT sensor library" by Adafruit: Sketch -> Include Library -> Manage Libraries)
+//   SENSOR_TMP36       TMP36 (flat side facing you: left 5V, middle -> A0, right GND)
+//   SENSOR_LM35        LM35  (flat side facing you: left 5V, middle -> A0, right GND)
+//   SENSOR_THERMISTOR  10k thermistor module from Arduino/Elegoo kits: S -> A0, + -> 5V, - -> GND
+#define SENSOR_NONE 0
+#define SENSOR_DHT11 1
+#define SENSOR_DHT22 2
+#define SENSOR_TMP36 3
+#define SENSOR_LM35 4
+#define SENSOR_THERMISTOR 5
+
+#define SENSOR_TYPE SENSOR_NONE
+
+const int DHT_PIN = 3;
+const int ANALOG_TEMP_PIN = A0;
+
+#if SENSOR_TYPE == SENSOR_DHT11 || SENSOR_TYPE == SENSOR_DHT22
+#include <DHT.h>
+DHT dht(DHT_PIN, SENSOR_TYPE == SENSOR_DHT11 ? DHT11 : DHT22);
+#endif
+
+
+#define FW_VERSION "r4wifi-1.1"
 const int SERVO_PIN = 9;
-const unsigned long SYNC_EVERY_MS = 10000;
+const unsigned long SYNC_EVERY_MS = 3000;     // check the website every 3 s
 const unsigned long OFFLINE_AFTER_MS = 120000;   // switch to the stored schedule after 2 min without the server
 const unsigned long TEST_HOLD_MS = 60000;        // keep a servo-test angle for a minute
 
@@ -94,13 +121,49 @@ void moveServo(int angle) {
   Serial.println(angle);
 }
 
+// ---- indoor temperature ----------------------------------------------------------
+float analogAverage() {
+  long sum = 0;
+  for (int i = 0; i < 8; i++) {
+    sum += analogRead(ANALOG_TEMP_PIN);
+    delay(2);
+  }
+  return sum / 8.0;
+}
+
+// Returns the indoor temperature in °C, or NAN if there is no sensor or it failed.
+float readTemperature() {
+#if SENSOR_TYPE == SENSOR_DHT11 || SENSOR_TYPE == SENSOR_DHT22
+  return dht.readTemperature();
+#elif SENSOR_TYPE == SENSOR_TMP36
+  float volts = analogAverage() * 5.0 / 1023.0;
+  return (volts - 0.5) * 100.0;
+#elif SENSOR_TYPE == SENSOR_LM35
+  return analogAverage() * 500.0 / 1023.0;
+#elif SENSOR_TYPE == SENSOR_THERMISTOR
+  // Steinhart-Hart equation for the kit's 10k NTC thermistor.
+  // If the reading goes DOWN when you warm the sensor with your fingers, swap its + and - wires.
+  float raw = analogAverage();
+  if (raw < 1 || raw > 1022) return NAN;
+  double logR = log(10000.0 * (1023.0 / raw - 1.0));
+  double kelvin = 1.0 / (0.001129148 + (0.000234125 + 0.0000000876741 * logR * logR) * logR);
+  return kelvin - 273.15;
+#else
+  return NAN;
+#endif
+}
+
 // ---- LCD ---------------------------------------------------------------------------
+void printLine(int row, String text) {
+  // Overwrite in place (padded to 16 characters) instead of clearing, so the display doesn't flicker.
+  while (text.length() < 16) text += ' ';
+  lcd.setCursor(0, row);
+  lcd.print(text.substring(0, 16));
+}
+
 void showLcd(const String &a, const String &b) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(a.substring(0, 16));
-  lcd.setCursor(0, 1);
-  lcd.print(b.substring(0, 16));
+  printLine(0, a);
+  printLine(1, b);
 }
 
 // ---- offline schedule ------------------------------------------------------------------
@@ -170,6 +233,8 @@ bool syncWithServer() {
   String path = "/api/device/sync?fw=" FW_VERSION "&via=wifi&rssi=" + String(WiFi.RSSI());
   if (currentAngle >= 0) path += "&angle=" + String(currentAngle);
   if (ackId >= 0) path += "&ack=" + String(ackId);
+  float t = readTemperature();
+  if (!isnan(t) && t > -30 && t < 60) path += "&temp=" + String(t, 1);
 
   net.print("GET " + path + " HTTP/1.1\r\n");
   net.print("Host: " SECRET_SERVER_HOST "\r\n");
@@ -227,6 +292,9 @@ void handleSerial() {
 void setup() {
   Serial.begin(9600);
   lcd.begin(16, 2);
+#if SENSOR_TYPE == SENSOR_DHT11 || SENSOR_TYPE == SENSOR_DHT22
+  dht.begin();
+#endif
   showLcd("SMART HEATING", "SYSTEM READY");
   loadSchedule();
   Serial.println("SMART HEATING CONTROLLER READY");
